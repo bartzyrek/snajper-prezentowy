@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Snajper Prezentowy</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-zinc-950 text-zinc-100 px-4 py-8 flex flex-col items-center">
+  <div class="w-full max-w-md space-y-6">
+    <div class="text-center space-y-2">
+      <h1 class="text-3xl font-extrabold tracking-tight text-white">🎯 Snajper Prezentowy</h1>
+      <p class="text-sm text-zinc-400">Zero kubków i skarpetek. 5 konkretnych strzałów w 5 sekund.</p>
+    </div>
+
+    <form id="giftForm" class="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-5 shadow-xl">
+      <div>
+        <label class="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">Dla kogo szukasz?</label>
+        <select id="dlaKogo" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500">
+          <option>Partner / Partnerka</option>
+          <option>Tata</option>
+          <option>Mama</option>
+          <option>Kumpel / Kumpela</option>
+          <option>Dziecko</option>
+          <option>Szef</option>
+        </select>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">Wiek</label>
+          <input id="wiek" type="number" value="28" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+            Budżet: <span id="budzetLabel" class="text-emerald-400">150 zł</span>
+          </label>
+          <input id="budzet" type="range" min="30" max="1000" step="10" value="150" class="w-full accent-emerald-500 mt-2" />
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">Co lubi? (im konkretniej, tym lepiej)</label>
+        <textarea id="zainteresowania" required rows="2" placeholder="np. kawa, siłownia, majsterkowanie, gry PC, ma już wszystko..." class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"></textarea>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">Tryb</label>
+        <select id="tryb" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500">
+          <option value="powazny">🎁 Poważny / Trafiony</option>
+          <option value="jajo">🤣 Z jajem / Śmieszny</option>
+        </select>
+      </div>
+
+      <button id="submitBtn" type="submit" class="w-full py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold text-base transition disabled:opacity-50">
+        Namierz prezenty →
+      </button>
+    </form>
+
+    <p id="errorBox" class="hidden text-center text-red-400 text-sm"></p>
+    <div id="results" class="space-y-4"></div>
+  </div>
+
+  <script>
+    // TUTAJ PODMIENISZ LINK, GDY ZATWIERDZĄ CI KONTO AFILIACYJNE
+    const AFFILIATE_PREFIX = '';
+
+    const budzetInput = document.getElementById('budzet');
+    const budzetLabel = document.getElementById('budzetLabel');
+    budzetInput.addEventListener('input', () => {
+      budzetLabel.textContent = budzetInput.value + ' zł';
+    });
+
+    function buildLink(query, maxPrice) {
+      const allegroUrl = `https://allegro.pl/listing?string=${encodeURIComponent(query)}&price_to=${maxPrice}`;
+      if (!AFFILIATE_PREFIX) return allegroUrl;
+      return `${AFFILIATE_PREFIX}${encodeURIComponent(allegroUrl)}`;
+    }
+
+    document.getElementById('giftForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('submitBtn');
+      const errorBox = document.getElementById('errorBox');
+      const results = document.getElementById('results');
+
+      btn.disabled = true;
+      btn.textContent = 'Odrzucam skarpetki i szukam...';
+      errorBox.classList.add('hidden');
+      results.innerHTML = '';
+
+      const payload = {
+        dlaKogo: document.getElementById('dlaKogo').value,
+        wiek: document.getElementById('wiek').value,
+        budzet: Number(budzetInput.value),
+        zainteresowania: document.getElementById('zainteresowania').value,
+        tryb: document.getElementById('tryb').value
+      };
+
+      try {
+        const res = await fetch('/api/snajper', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        results.innerHTML = (data.prezenty || []).map(p => `
+          <div class="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-2">
+            <div class="flex justify-between items-start gap-2">
+              <h2 class="font-bold text-lg text-white leading-snug">${p.nazwa}</h2>
+              <span class="shrink-0 text-xs font-semibold bg-emerald-500/15 text-emerald-400 px-2.5 py-1 rounded-full">${p.tag}</span>
+            </div>
+            <p class="text-xs text-zinc-400 font-medium">Szacowana cena: ${p.cena_szacowana}</p>
+            <p class="text-sm text-zinc-300">${p.dlaczego_trafi}</p>
+            <a href="${buildLink(p.fraza_szukania, payload.budzet)}" target="_blank" rel="noopener noreferrer"
+               class="mt-2 block w-full text-center py-2.5 rounded-xl bg-orange-500 hover:bg-orange-400 text-white font-bold text-sm transition">
+              Sprawdź oferty na Allegro →
+            </a>
+          </div>
+        `).join('');
+      } catch {
+        errorBox.textContent = 'Nie udało się namierzyć prezentów. Spróbuj ponownie.';
+        errorBox.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Namierz prezenty →';
+      }
+    });
+  </script>
+</body>
+</html>
